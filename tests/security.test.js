@@ -13,21 +13,26 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createApp } = require('../src/app');
+const { createTestDb } = require('./helpers/test-db');
 const S = require('../src/security');
 
 const ADMIN = { username: 'admin', password: 'SenhaForte123' };
 const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
+/** Primeira linha de uma consulta */
+const one = async (s, sql, params = []) => (await s.app.db.query(sql, params))[0];
+
 async function startServer(opts = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-test-'));
-  const app = createApp({ dbFile: path.join(dir, 'test.db'), uploadsDir: path.join(dir, 'uploads'), log: () => {}, ...opts });
-  app.db.prepare('INSERT INTO admins (username, pass_hash) VALUES (?, ?)').run(ADMIN.username, S.hashPassword(ADMIN.password));
+  const tdb = createTestDb(dir);
+  const app = createApp({ db: tdb.db, log: () => {}, adminUser: ADMIN.username, adminPassword: ADMIN.password, ...opts });
+  await app.ready();
   const server = http.createServer(app.handler);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   return {
     app, base, dir,
-    close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => { app.db.close(); fs.rmSync(dir, { recursive: true, force: true }); r(); }); })
+    close: () => new Promise((r) => { server.closeAllConnections(); server.close(async () => { await tdb.drop(); fs.rmSync(dir, { recursive: true, force: true }); r(); }); })
   };
 }
 
@@ -144,7 +149,7 @@ describe('3. Autenticação do painel', () => {
   });
 
   test('cookie de sessão é HttpOnly e SameSite=Strict; senha não volta na resposta', async () => {
-    s.app.limits.login.reset('127.0.0.1');
+    await s.app.limits.login.reset('127.0.0.1');
     const l = await login(s.base);
     assert.match(l.setCookie, /HttpOnly/);
     assert.match(l.setCookie, /SameSite=Strict/);
@@ -153,8 +158,8 @@ describe('3. Autenticação do painel', () => {
     assert.doesNotMatch(r.text, /pass_hash|scrypt\$/);
   });
 
-  test('senhas ficam com hash scrypt no banco (nunca em texto)', () => {
-    const row = s.app.db.prepare('SELECT pass_hash FROM admins').get();
+  test('senhas ficam com hash scrypt no banco (nunca em texto)', async () => {
+    const row = await one(s, 'SELECT pass_hash FROM admins');
     assert.match(row.pass_hash, /^scrypt\$/);
     assert.ok(!row.pass_hash.includes(ADMIN.password));
   });
@@ -162,7 +167,7 @@ describe('3. Autenticação do painel', () => {
   test('tokens de sessão são guardados como hash no banco', async () => {
     const l = await login(s.base);
     const token = l.cookie.split('=')[1];
-    const raw = s.app.db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE token_hash = ?').get(token).n;
+    const raw = Number((await one(s, 'SELECT CAST(COUNT(*) AS INTEGER) AS n FROM sessions WHERE token_hash = $1', [token])).n);
     assert.equal(raw, 0, 'token não pode estar em texto puro');
   });
 
@@ -176,14 +181,14 @@ describe('3. Autenticação do painel', () => {
 
   test('sessão expirada é rejeitada', async () => {
     const l = await login(s.base);
-    s.app.db.prepare('UPDATE sessions SET expires_at = 1').run();
+    await s.app.db.query('UPDATE sessions SET expires_at = 1 RETURNING token_hash');
     const r = await req(s.base, 'GET', '/api/admin/data', { cookie: l.cookie });
     assert.equal(r.status, 401);
   });
 
   test('força bruta: bloqueia após 5 tentativas erradas', async () => {
-    s.app.limits.login.reset('127.0.0.1');
-    s.app.limits.loginUser.reset('admin');
+    await s.app.limits.login.reset('127.0.0.1');
+    await s.app.limits.loginUser.reset('admin');
     let last;
     for (let i = 0; i < 6; i++) last = await req(s.base, 'POST', '/api/admin/login', { json: { username: 'admin', password: 'errada' + i } });
     assert.equal(last.status, 429);
@@ -228,8 +233,8 @@ describe('4. CSRF (requisições forjadas de outros sites)', () => {
     const r = await req(s.base, 'PUT', '/api/admin/settings', { cookie: l.cookie, json: { nome: 'Maicon Piveta' }, headers: { 'X-CSRF-Token': l.csrf, Origin: s.base } });
     assert.equal(r.status, 200);
   });
-  test('nada foi alterado pelas tentativas de ataque', () => {
-    const v = s.app.db.prepare("SELECT value FROM settings WHERE key = 'nome'").get().value;
+  test('nada foi alterado pelas tentativas de ataque', async () => {
+    const v = (await one(s, "SELECT value FROM settings WHERE key = 'nome'")).value;
     assert.equal(v, 'Maicon Piveta');
   });
 });
@@ -260,7 +265,7 @@ describe('5. Validação de dados, XSS e links maliciosos', () => {
   test('chaves de configuração desconhecidas são ignoradas', async () => {
     const r = await adm('PUT', '/api/admin/settings', { '__proto__': 'x', 'chave_inventada': 'x', constructor: 'x' });
     assert.equal(r.status, 200);
-    const n = s.app.db.prepare("SELECT COUNT(*) AS n FROM settings WHERE key IN ('chave_inventada','__proto__','constructor')").get().n;
+    const n = Number((await one(s, "SELECT CAST(COUNT(*) AS INTEGER) AS n FROM settings WHERE key IN ('chave_inventada','__proto__','constructor')")).n);
     assert.equal(n, 0);
   });
 
@@ -306,7 +311,7 @@ describe('5. Validação de dados, XSS e links maliciosos', () => {
     assert.equal((await adm('DELETE', '/api/admin/projects/1%20OR%201=1')).status, 404);
     assert.equal((await adm('DELETE', '/api/admin/projects/999999')).status, 404);
     assert.equal((await adm('DELETE', "/api/admin/users")).status, 404);
-    const n = s.app.db.prepare('SELECT COUNT(*) AS n FROM projects').get().n;
+    const n = Number((await one(s, 'SELECT CAST(COUNT(*) AS INTEGER) AS n FROM projects')).n);
     assert.ok(n > 0, 'projetos não podem ter sido apagados');
   });
 
@@ -379,13 +384,13 @@ describe('7. Formulário de contato (anti-spam)', () => {
   test('robôs que preenchem o campo oculto são descartados silenciosamente', async () => {
     const r = await send({ name: 'Bot', email: 'bot@spam.com', message: 'Compre agora!!!!!!', website: 'http://spam' });
     assert.equal(r.status, 200);
-    assert.equal(s.app.db.prepare("SELECT COUNT(*) AS n FROM messages WHERE name = 'Bot'").get().n, 0);
+    assert.equal(Number((await one(s, "SELECT CAST(COUNT(*) AS INTEGER) AS n FROM messages WHERE name = 'Bot'")).n), 0);
   });
 
   test('mensagem válida é salva no banco; IP guardado apenas como hash (LGPD)', async () => {
     const r = await send({ name: 'Ana', email: 'ana@exemplo.com', phone: '(47) 99999-0000', message: '<script>alert(1)</script> quero um chatbot' });
     assert.equal(r.status, 201);
-    const row = s.app.db.prepare("SELECT * FROM messages WHERE name = 'Ana'").get();
+    const row = await one(s, "SELECT * FROM messages WHERE name = 'Ana'");
     assert.ok(row);
     assert.ok(!row.ip_hash.includes('127.0.0.1'));
   });
@@ -420,5 +425,92 @@ describe('8. Proteções gerais do servidor', () => {
     const r = await req(s.base, 'GET', '/pagina-que-nao-existe', { headers: { Accept: 'text/html' } });
     assert.equal(r.status, 404);
     assert.match(r.text, /Página não encontrada/);
+  });
+});
+
+// =========================================================
+describe('9. Configuração para a Vercel', () => {
+  test('vercel.json aplica os mesmos cabeçalhos de segurança às páginas estáticas', () => {
+    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
+    const all = cfg.headers.find((h) => h.source === '/(.*)');
+    assert.ok(all, 'regra de cabeçalhos para todas as páginas');
+    const got = Object.fromEntries(all.headers.map((h) => [h.key, h.value]));
+    assert.deepEqual(got, S.securityHeaders({ https: true }));
+    const adm = cfg.headers.find((h) => h.source === '/admin/(.*)');
+    assert.ok(adm.headers.some((h) => h.key === 'X-Robots-Tag'));
+  });
+
+  test('vercel.json envia /api e /uploads para a função e publica só a pasta public', () => {
+    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
+    assert.equal(cfg.outputDirectory, 'public');
+    const dests = cfg.rewrites.map((r) => `${r.source}->${r.destination}`);
+    assert.ok(dests.includes('/api/:path*->/api'));
+    assert.ok(dests.includes('/uploads/:path*->/api'));
+  });
+
+  test('arquivos sensíveis não ficam na pasta pública', () => {
+    const pub = path.join(__dirname, '..', 'public');
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [e.name]));
+    const files = walk(pub);
+    assert.ok(!files.some((f) => /^\.env|\.db$|\.sqlite$|server\.js$|package\.json$/.test(f)), files.join(','));
+  });
+
+  test('.gitignore protege .env, banco local e node_modules', () => {
+    const gi = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8');
+    for (const x of ['.env', 'data/', 'node_modules/']) assert.ok(gi.split(/\r?\n/).includes(x), x);
+  });
+
+  test('função da Vercel responde com erro amigável se DATABASE_URL faltar', async () => {
+    const saved = process.env.DATABASE_URL; delete process.env.DATABASE_URL;
+    delete require.cache[require.resolve('../api/index.js')];
+    const fn = require('../api/index.js');
+    const server = http.createServer(fn);
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const r = await fetch(`http://127.0.0.1:${server.address().port}/api/site`);
+      assert.equal(r.status, 500);
+      const j = await r.json();
+      assert.match(j.erro, /variáveis de ambiente/);
+      assert.doesNotMatch(JSON.stringify(j), /DATABASE_URL|postgres:\/\//);
+    } finally {
+      server.close();
+      if (saved !== undefined) process.env.DATABASE_URL = saved;
+    }
+  });
+
+  test('no modo Vercel (serveStatic=false) o servidor não expõe arquivos do projeto', async () => {
+    const v = await startServer({ serveStatic: false, trustProxy: true, https: true });
+    try {
+      for (const p of ['/', '/index.html', '/../server.js', '/src/app.js', '/package.json']) {
+        const out = await rawGet(v.base, p);
+        assert.match(out, /^HTTP\/1\.1 404/, p);
+      }
+      const r = await req(v.base, 'GET', '/api/site');
+      assert.equal(r.status, 200);
+    } finally { await v.close(); }
+  });
+
+  test('atrás do proxy da Vercel, o limite de login usa o IP real do visitante', async () => {
+    const v = await startServer({ serveStatic: false, trustProxy: true });
+    try {
+      let last;
+      for (let i = 0; i < 6; i++) last = await req(v.base, 'POST', '/api/admin/login', { json: { username: 'x', password: 'y' }, headers: { 'X-Real-IP': '203.0.113.9' } });
+      assert.equal(last.status, 429);
+      // outro visitante não é afetado
+      const other = await req(v.base, 'POST', '/api/admin/login', { json: ADMIN, headers: { 'X-Real-IP': '198.51.100.7' } });
+      assert.equal(other.status, 200);
+    } finally { await v.close(); }
+  });
+
+  test('limites de tentativa ficam no banco (valem entre instâncias serverless)', async () => {
+    const tdbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-test-'));
+    const tdb = createTestDb(tdbDir);
+    try {
+      const a = createApp({ db: tdb.db, log: () => {} });
+      const b = createApp({ db: tdb.db, log: () => {} }); // simula 2ª instância
+      await a.ready(); await b.ready();
+      for (let i = 0; i < 5; i++) await a.limits.login.hit('1.2.3.4');
+      assert.equal(await b.limits.login.isBlocked('1.2.3.4'), true);
+    } finally { await tdb.drop(); fs.rmSync(tdbDir, { recursive: true, force: true }); }
   });
 });

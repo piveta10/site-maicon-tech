@@ -305,7 +305,7 @@
     const list = el('div', { class: 'list' });
     if (!msgs.length) list.append(el('p', { class: 'muted', text: 'Nenhuma mensagem recebida ainda.' }));
     for (const m of msgs) {
-      const date = new Date(m.created_at.replace(' ', 'T') + 'Z').toLocaleString('pt-BR');
+      const date = new Date(Number(m.created_at)).toLocaleString('pt-BR');
       const reply = 'mailto:' + encodeURIComponent(m.email).replace('%40', '@') + '?subject=' + encodeURIComponent('Re: ' + (m.subject || 'Contato pelo site'));
       const phoneDigits = (m.phone || '').replace(/\D/g, '');
       list.append(el('article', { class: 'msg' + (m.is_read ? '' : ' is-new') }, [
@@ -352,7 +352,7 @@
     const logBox = el('section', { class: 'group' }, [el('h3', { text: 'Registro de atividades (últimas 100)' }), el('p', { class: 'muted', text: 'Carregando…' })]);
     api('/api/admin/audit').then((rows) => {
       const t = el('table', {}, [el('tr', {}, [el('th', { text: 'Data' }), el('th', { text: 'Ação' }), el('th', { text: 'Detalhe' })]),
-        ...rows.map((r) => el('tr', {}, [el('td', { text: new Date(r.created_at.replace(' ', 'T') + 'Z').toLocaleString('pt-BR') }), el('td', { text: r.action }), el('td', { text: r.detail })]))]);
+        ...rows.map((r) => el('tr', {}, [el('td', { text: new Date(Number(r.created_at)).toLocaleString('pt-BR') }), el('td', { text: r.action }), el('td', { text: r.detail })]))]);
       logBox.replaceChildren(logBox.firstChild, t);
     }).catch((e) => toast(e.message, true));
     return el('div', {}, [head('Segurança', 'Senha de acesso e histórico de alterações no painel.'), form, logBox]);

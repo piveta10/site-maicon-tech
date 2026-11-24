@@ -1,96 +1,144 @@
 # MaiconTech — Site de Tecnologia e IA
 
-Site profissional de **Maicon Piveta** com foco em Inteligência Artificial, painel administrativo para editar tudo, banco de dados e testes de segurança automatizados.
+Site profissional de **Maicon Piveta** com foco em Inteligência Artificial, painel administrativo para editar tudo, banco de dados **Neon (Postgres)** e hospedagem na **Vercel**.
 
-- **Sem dependências externas**: usa apenas recursos nativos do Node.js (servidor HTTP, SQLite e criptografia). Não é preciso rodar `npm install`.
-- **Tudo editável** pelo painel `/admin`: textos, contatos, WhatsApp, e-mail, redes sociais, serviços, projetos (com link e imagem), depoimentos.
-- **Banco de dados SQLite** em `data/site.db` (criado automaticamente).
+- **Tudo editável** pelo painel `/admin`: textos, contatos, WhatsApp, e-mail, redes sociais, serviços, projetos (com link e imagem), depoimentos e mensagens.
+- **Banco de dados**: Neon Postgres em produção. Para testar no seu computador sem configurar nada, o site usa automaticamente um SQLite local.
+- **Imagens enviadas** pelo painel ficam guardadas no próprio banco (não precisa de outro serviço).
+- **88 testes de segurança** automatizados.
 
 ---
 
-## 1. Requisitos
+## 1. Publicar: GitHub → Neon → Vercel
 
-- **Node.js 22.13 ou mais novo** (recomendado: versão LTS mais recente em https://nodejs.org).
-  Para conferir: `node --version`
+### Passo 1 — Enviar para o GitHub
+Crie um repositório vazio chamado `maicontech` em https://github.com/new e, no **PowerShell**, dentro da pasta do projeto:
 
-## 2. Como rodar
-
-```bash
-# dentro da pasta do projeto
-copy .env.example .env      # Windows  (Linux/Mac: cp .env.example .env)
-# edite o .env e defina ADMIN_PASSWORD (mín. 10 caracteres, maiúscula, minúscula e número)
-
-npm start
+```powershell
+git init
+git add .
+git commit -m "Site MaiconTech"
+git branch -M main
+git remote add origin https://github.com/piveta10/maicontech.git
+git push -u origin main
 ```
 
-Abra:
-- Site: http://localhost:3000
-- Painel: http://localhost:3000/admin  (usuário `admin` e a senha do `.env`)
+> O `.gitignore` já impede que `.env` (senhas), `data/` (banco local) e `node_modules/` sejam enviados.
 
-> Se você não definir `ADMIN_PASSWORD`, uma senha forte é gerada e mostrada **uma única vez** no terminal na primeira execução.
+### Passo 2 — Importar na Vercel
+1. Entre em https://vercel.com com sua conta do GitHub → **Add New… → Project**.
+2. Escolha o repositório `maicontech` → **Import**.
+3. Em *Framework Preset* deixe **Other**. Não mude mais nada (o `vercel.json` já configura tudo).
+4. Em **Environment Variables** adicione:
 
-Esqueceu a senha?
+   | Nome | Valor |
+   |---|---|
+   | `ADMIN_PASSWORD` | sua senha do painel (10+ caracteres, com maiúscula, minúscula e número) |
+   | `ADMIN_USER` | `admin` (opcional) |
 
-```bash
-npm run admin:senha -- admin NovaSenhaForte123
+5. Clique em **Deploy**. (O site ainda vai dar erro na API até o passo 3 — é normal.)
+
+### Passo 3 — Criar o banco Neon e conectar
+1. No projeto da Vercel: aba **Storage → Create Database → Neon** (Serverless Postgres) → região mais próxima (ex.: *São Paulo* se disponível, ou *Washington D.C.*) → **Create** → **Connect** ao projeto.
+   A Vercel cria sozinha a variável **`DATABASE_URL`**.
+   > Alternativa: crie o banco em https://neon.com, copie a *Connection string* (começa com `postgresql://`) e cadastre na Vercel como `DATABASE_URL`.
+2. Vá em **Deployments → ⋯ → Redeploy** para o site pegar as variáveis novas.
+
+### Passo 4 — Pronto!
+- Site: `https://seu-projeto.vercel.app`
+- Painel: `https://seu-projeto.vercel.app/admin` (usuário `admin` + a senha do `ADMIN_PASSWORD`)
+
+No primeiro acesso o site cria sozinho as tabelas, o conteúdo inicial e o administrador.
+Depois de entrar, você pode trocar a senha em **Painel → Segurança** (a variável `ADMIN_PASSWORD` só é usada para criar o primeiro admin).
+
+A cada `git push` na branch `main`, a Vercel publica a nova versão automaticamente.
+
+---
+
+## 2. Testar no seu computador
+
+Requisito: **Node.js 22.13+** (você já tem). Use o **PowerShell** ou o Prompt de Comando, na pasta do projeto.
+
+```powershell
+copy .env.example .env
+notepad .env          # preencha ADMIN_PASSWORD (e DATABASE_URL se quiser usar o Neon)
+npm.cmd install       # só necessário se usar o Neon localmente
+node server.js
 ```
+
+Abra http://localhost:3000 e http://localhost:3000/admin.
+
+- **Sem `DATABASE_URL`** → usa um banco SQLite local em `data/site.db` (ótimo para testes; não vai para o GitHub).
+- **Com `DATABASE_URL`** → usa o mesmo banco Neon do site publicado (cuidado: as alterações aparecem no site real).
+
+> No PowerShell use `npm.cmd` em vez de `npm` (o Windows bloqueia o `npm` por padrão), ou rode `node server.js` direto.
+
+Comandos úteis:
+
+```powershell
+npm.cmd test                                        # testes de segurança
+npm.cmd run admin:senha -- admin NovaSenha123        # redefine a senha (no banco do .env)
+npm.cmd run db:setup                                 # cria as tabelas manualmente (opcional)
+```
+
+Esqueceu a senha do site publicado? Coloque a `DATABASE_URL` do Neon no seu `.env`, rode `npm.cmd install` e depois `npm.cmd run admin:senha -- admin NovaSenha123`.
+
+---
 
 ## 3. Primeiros passos no painel
 
-1. **Conteúdo do site → Contato**: preencha seu **e-mail** (está vazio de propósito) e, se quiser, LinkedIn/Instagram/YouTube. Campos vazios não aparecem no site.
-2. **Projetos**: há 1 projeto real (Ordem de Serviço, do seu GitHub) e 3 **modelos de projetos com IA ocultos**. Edite, coloque o **link do trabalho** e a imagem, e marque *Visível no site*.
-3. **Depoimentos**: a seção só aparece quando houver ao menos um depoimento visível. Use apenas depoimentos reais.
-4. Os **repositórios públicos do GitHub** (github.com/piveta10) aparecem automaticamente na seção Projetos (pode desligar no painel).
-5. **Mensagens**: tudo que for enviado pelo formulário de contato fica salvo aqui, com atalho para responder por e-mail ou WhatsApp.
+1. **Conteúdo do site → Contato**: preencha seu **e-mail** (está vazio de propósito). Redes sociais vazias não aparecem.
+2. **Projetos**: há 1 projeto real (Ordem de Serviço) e 3 **modelos de projetos com IA ocultos**. Edite, coloque o **link do trabalho**, envie uma imagem e marque *Visível no site*.
+3. **Depoimentos**: a seção só aparece quando houver ao menos um visível. Use apenas depoimentos reais.
+4. Os **repositórios públicos do GitHub** aparecem automaticamente na seção Projetos.
+5. **Mensagens**: contatos do formulário, com atalho para responder por e-mail ou WhatsApp.
 
-## 4. Testes de segurança
+---
 
-```bash
-npm test
+## 4. Segurança
+
+```powershell
+npm.cmd test
 ```
 
-São **80 testes automatizados**, cobrindo:
+**88 testes automatizados**, executados tanto em SQLite quanto em **Postgres real** (mesmo motor do Neon):
 
 | Área | O que é testado |
 |---|---|
-| Cabeçalhos | CSP rígida (sem scripts inline), anti-clickjacking, nosniff, Referrer/Permissions-Policy, HSTS em HTTPS, sem CORS aberto |
-| Path traversal | 19 tentativas de ler arquivos do servidor (`../server.js`, `.env`, banco, `/etc/passwd`, codificações `%2e`, `%c0%ae`, null byte…) |
-| Autenticação | todas as rotas do painel exigem login; cookie falsificado/expirado; logout; SQL injection no login; senhas com hash **scrypt**; tokens guardados como hash; cookie `HttpOnly` + `SameSite=Strict`; mensagem de erro igual para usuário inexistente |
-| Força bruta | bloqueio após 5 tentativas erradas em 15 min (por IP) e 10 por usuário |
-| CSRF | exige token CSRF + mesma origem; rejeita formulários de outros sites |
-| XSS | conteúdo com `<script>` é salvo e exibido como texto; análise do código garante que dados nunca são inseridos como HTML; nenhum script/estilo inline |
-| Links maliciosos | `javascript:`, `data:`, `vbscript:`, `file:`, `//`, URLs com usuário:senha são recusados |
-| Upload | apenas PNG/JPG/WEBP/GIF verificados pelo conteúdo real; SVG e HTML disfarçado recusados; limite 3 MB; nome aleatório |
-| Formulário de contato | validação, campo anti-robô (honeypot), limite de 5 mensagens/hora por IP, IP salvo apenas como hash (LGPD) |
-| Servidor | limite geral de requisições, limite de tamanho do corpo, timeouts contra conexões lentas, erros sem detalhes técnicos |
+| Cabeçalhos | CSP rígida (sem scripts inline), anti-clickjacking, nosniff, HSTS; o `vercel.json` aplica exatamente os mesmos cabeçalhos às páginas |
+| Path traversal | 19 tentativas de ler arquivos do servidor (`../`, `%2e`, `%c0%ae`, null byte, `.env`, banco…) |
+| Autenticação | todas as rotas do painel exigem login; SQL injection no login; senhas com hash **scrypt**; sessões guardadas como hash; cookie `HttpOnly` + `Secure` + `SameSite=Strict`; logout e expiração |
+| Força bruta | bloqueio após 5 tentativas em 15 min por IP (IP real do visitante na Vercel) e 10 por usuário — **guardado no banco**, vale para todas as instâncias da Vercel |
+| CSRF | exige token + mesma origem; recusa formulários de outros sites |
+| XSS | conteúdo com `<script>` é salvo e exibido como texto; nada de `innerHTML` com dados |
+| Links | `javascript:`, `data:`, `file:`, `//`… recusados |
+| Upload | apenas PNG/JPG/WEBP/GIF verificados pelo conteúdo real; SVG/HTML recusados; máx. 3 MB |
+| Contato | validação, campo anti-robô, 5 mensagens/hora por IP, IP salvo só como hash (LGPD) |
+| Vercel | função não expõe arquivos do projeto; erro amigável sem vazar a `DATABASE_URL`; `.gitignore` protege segredos |
+
+Para rodar os testes em Postgres: `TEST_DB=pg` com o `psql` instalado (variáveis `PGHOST`, `PGUSER`).
+
+---
 
 ## 5. Estrutura
 
 ```
-server.js              → inicia o servidor (lê o .env)
-src/app.js             → rotas, API, arquivos estáticos
-src/db.js              → tabelas e conteúdo inicial do banco
+api/index.js           → função serverless da Vercel (atende /api e /uploads)
+vercel.json            → configuração da Vercel (pasta pública, rotas, cabeçalhos)
+server.js              → servidor local para testes
+src/app.js             → rotas, API, segurança das requisições
+src/db.js              → tabelas, conteúdo inicial, conexão Neon/SQLite
 src/security.js        → senhas, tokens, validação, cabeçalhos
-scripts/admin-senha.js → redefinir senha do admin
-public/                → site (index.html, css, js, img)
+src/env.js             → leitura do arquivo .env
+scripts/               → admin:senha e db:setup
+public/                → site (index.html, css, js, img) — servido pela CDN da Vercel
 public/admin/          → painel administrativo
-tests/security.test.js → testes de segurança
-data/                  → banco de dados e imagens enviadas (criado sozinho; faça backup!)
+tests/                 → testes de segurança
 ```
 
 ### Como ampliar
-
 - **Novo serviço / projeto**: pelo painel, sem tocar em código.
 - **Novo ícone**: adicione o desenho em `ICONS` (public/js/main.js), o nome na lista `ICONS` em `src/app.js` e o rótulo em `ICON_LABELS` (public/admin/admin.js).
-- **Novo campo de texto**: adicione a chave em `DEFAULT_SETTINGS` (src/db.js), o campo em `SETTINGS_GROUPS` (admin.js) e um elemento com `data-s="sua_chave"` no `index.html`.
+- **Novo campo de texto**: adicione a chave em `DEFAULT_SETTINGS` (src/db.js), o campo em `SETTINGS_GROUPS` (admin.js) e um elemento com `data-s="sua_chave"` no `index.html`. O banco é atualizado sozinho no próximo acesso.
 - **Cores**: variáveis no topo de `public/css/style.css`.
-
-## 6. Publicar na internet
-
-Funciona em qualquer hospedagem que rode Node.js (VPS, Render, Railway, Fly.io, Hostinger VPS…):
-
-1. Envie a pasta (sem `data/` e sem `.env`), crie o `.env` no servidor.
-2. Use **HTTPS** e coloque `HTTPS=1` no `.env`.
-3. Se estiver atrás de proxy (Nginx, Cloudflare, Render), use `TRUST_PROXY=1`.
-4. O disco precisa ser **persistente** (a pasta `data/` guarda o banco e as imagens).
-5. Faça backup periódico da pasta `data/`.
+- **Domínio próprio** (ex.: maicontech.com.br): Vercel → Settings → Domains.

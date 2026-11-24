@@ -1,27 +1,31 @@
 'use strict';
 /**
- * Banco de dados (SQLite nativo do Node — node:sqlite).
- * Todas as consultas usam "prepared statements" (parâmetros ?), o que
- * impede injeção de SQL.
+ * Banco de dados.
+ *  - Produção (Vercel): Neon Postgres, via variável DATABASE_URL.
+ *  - Desenvolvimento sem DATABASE_URL: SQLite local (data/site.db), nativo do Node.
+ *
+ * Todas as consultas usam parâmetros ($1, $2...), o que impede injeção de SQL.
+ * Interface comum dos dois bancos:
+ *   await db.query(sql, params)  -> array de linhas
+ *   await db.exec(sqlMultiplo)   -> executa comandos de criação de tabelas
  */
 const fs = require('node:fs');
 const path = require('node:path');
 
-// Silencia o aviso "ExperimentalWarning" do SQLite nativo.
-const origEmit = process.emitWarning;
-process.emitWarning = function (w, ...a) {
-  if (String(w && w.message ? w.message : w).includes('SQLite')) return;
-  return origEmit.call(process, w, ...a);
-};
-const { DatabaseSync } = require('node:sqlite');
-
-const SCHEMA = `
+// ---------------------------------------------------------------
+// Estrutura das tabelas (uma versão para cada banco)
+// ---------------------------------------------------------------
+function schema(dialect) {
+  const pg = dialect === 'postgres';
+  const ID = pg ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+  const BIG = pg ? 'BIGINT' : 'INTEGER';
+  return `
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS services (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  id          ${ID},
   icon        TEXT NOT NULL DEFAULT 'code',
   title       TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -30,7 +34,7 @@ CREATE TABLE IF NOT EXISTS services (
   active      INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS projects (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  id          ${ID},
   title       TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   tags        TEXT NOT NULL DEFAULT '',
@@ -42,7 +46,7 @@ CREATE TABLE IF NOT EXISTS projects (
   active      INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS testimonials (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         ${ID},
   name       TEXT NOT NULL,
   role       TEXT NOT NULL DEFAULT '',
   text       TEXT NOT NULL,
@@ -51,7 +55,7 @@ CREATE TABLE IF NOT EXISTS testimonials (
   active     INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS messages (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         ${ID},
   name       TEXT NOT NULL,
   email      TEXT NOT NULL,
   phone      TEXT NOT NULL DEFAULT '',
@@ -59,30 +63,45 @@ CREATE TABLE IF NOT EXISTS messages (
   message    TEXT NOT NULL,
   ip_hash    TEXT NOT NULL DEFAULT '',
   is_read    INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at ${BIG} NOT NULL
 );
 CREATE TABLE IF NOT EXISTS admins (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         ${ID},
   username   TEXT NOT NULL UNIQUE,
   pass_hash  TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at ${BIG} NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   admin_id   INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
   csrf       TEXT NOT NULL,
-  expires_at INTEGER NOT NULL
+  expires_at ${BIG} NOT NULL
 );
 CREATE TABLE IF NOT EXISTS audit_log (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         ${ID},
   admin_id   INTEGER,
   action     TEXT NOT NULL,
   detail     TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at ${BIG} NOT NULL
+);
+CREATE TABLE IF NOT EXISTS uploads (
+  id         TEXT PRIMARY KEY,
+  mime       TEXT NOT NULL,
+  data_b64   TEXT NOT NULL,
+  size       INTEGER NOT NULL,
+  created_at ${BIG} NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key      TEXT PRIMARY KEY,
+  count    INTEGER NOT NULL,
+  reset_at ${BIG} NOT NULL
 );
 `;
+}
 
-/** Conteúdo inicial — tudo pode ser alterado depois pelo painel /admin */
+// ---------------------------------------------------------------
+// Conteúdo inicial — tudo pode ser alterado depois pelo painel /admin
+// ---------------------------------------------------------------
 const DEFAULT_SETTINGS = {
   marca: 'MaiconTech',
   marca_slogan: 'Soluções em Tecnologia & IA',
@@ -127,33 +146,97 @@ const DEFAULT_SERVICES = [
 const DEFAULT_PROJECTS = [
   // [title, description, tags, link_url, repo_url, is_ai, active]
   ['Sistema de Ordem de Serviço', 'Sistema web para cadastro e acompanhamento de ordens de serviço.', 'Web, HTML', 'https://github.com/piveta10/ordem-serv', 'https://github.com/piveta10/ordem-serv', 0, 1],
-  // Modelos (inativos) — edite no painel, coloque o link real e ative.
+  // Modelos (ocultos) — edite no painel, coloque o link real e ative.
   ['Assistente Virtual com IA (modelo)', 'Chatbot com IA para atendimento automático no WhatsApp. Edite este projeto no painel e ative-o.', 'IA, Chatbot, WhatsApp', '', '', 1, 0],
   ['Automação de Documentos com IA (modelo)', 'Leitura e classificação automática de documentos e notas com IA. Edite e ative no painel.', 'IA, Automação, OCR', '', '', 1, 0],
   ['Dashboard Inteligente (modelo)', 'Painel de indicadores com análise e resumos gerados por IA. Edite e ative no painel.', 'IA, Dados, Dashboard', '', '', 1, 0]
 ];
 
-function openDb(file) {
+// ---------------------------------------------------------------
+// Adaptadores
+// ---------------------------------------------------------------
+
+/** Neon Postgres (produção / Vercel). Usa HTTP — ideal para funções serverless. */
+function neonAdapter(url) {
+  let sqlPromise;
+  const getSql = () => (sqlPromise ||= import('@neondatabase/serverless').then(({ neon }) => neon(url)));
+  return {
+    dialect: 'postgres',
+    async query(text, params = []) {
+      const sql = await getSql();
+      return sql.query(text, params);
+    },
+    async exec(multi) {
+      const sql = await getSql();
+      for (const stmt of multi.split(';').map((s) => s.trim()).filter(Boolean)) await sql.query(stmt, []);
+    },
+    async close() {}
+  };
+}
+
+/** SQLite local (desenvolvimento e testes). Converte $1 -> ?1. */
+function sqliteAdapter(file) {
+  const origEmit = process.emitWarning;
+  process.emitWarning = function (w, ...a) {
+    if (String(w && w.message ? w.message : w).includes('SQLite')) return;
+    return origEmit.call(process, w, ...a);
+  };
+  const { DatabaseSync } = require('node:sqlite');
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-  db.exec(SCHEMA);
-  seed(db);
-  return db;
+  const cache = new Map();
+  return {
+    dialect: 'sqlite',
+    async query(text, params = []) {
+      let st = cache.get(text);
+      if (!st) { st = db.prepare(text.replace(/\$(\d+)/g, '?$1')); cache.set(text, st); }
+      return st.all(...params);
+    },
+    async exec(multi) { db.exec(multi); },
+    async close() { db.close(); }
+  };
 }
 
-function seed(db) {
-  const insSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-  for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insSetting.run(k, v);
-
-  if (db.prepare('SELECT COUNT(*) AS n FROM services').get().n === 0) {
-    const ins = db.prepare('INSERT INTO services (icon, title, description, category, sort_order) VALUES (?, ?, ?, ?, ?)');
-    DEFAULT_SERVICES.forEach((s, i) => ins.run(s[0], s[1], s[2], s[3], i));
-  }
-  if (db.prepare('SELECT COUNT(*) AS n FROM projects').get().n === 0) {
-    const ins = db.prepare('INSERT INTO projects (title, description, tags, link_url, repo_url, is_ai, active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    DEFAULT_PROJECTS.forEach((p, i) => ins.run(...p, i));
-  }
+function createDb(opts = {}) {
+  const url = opts.url !== undefined ? opts.url : process.env.DATABASE_URL;
+  if (opts.adapter) return opts.adapter;
+  if (url && /^postgres(ql)?:\/\//.test(url)) return neonAdapter(url);
+  return sqliteAdapter(opts.file || path.join(__dirname, '..', 'data', 'site.db'));
 }
 
-module.exports = { openDb, DEFAULT_SETTINGS };
+const SCHEMA_VERSION = 'v1-' + Object.keys(DEFAULT_SETTINGS).length;
+
+/** Insere várias linhas com um só comando (menos idas ao banco). */
+function multiInsert(table, cols, rows, suffix = '') {
+  const params = [];
+  const values = rows.map((r) => '(' + r.map((v) => { params.push(v); return '$' + params.length; }).join(', ') + ')');
+  return [`INSERT INTO ${table} (${cols.join(', ')}) VALUES ${values.join(', ')} ${suffix}`, params];
+}
+
+/**
+ * Cria as tabelas (se não existirem) e o conteúdo inicial. Seguro rodar várias vezes.
+ * Só faz o trabalho pesado uma vez: guarda a versão em settings._schema.
+ */
+async function migrate(db) {
+  try {
+    const r = await db.query("SELECT value FROM settings WHERE key = '_schema'");
+    if (r[0] && r[0].value === SCHEMA_VERSION) return false;
+  } catch { /* tabelas ainda não existem */ }
+
+  await db.exec(schema(db.dialect));
+  await db.query(...multiInsert('settings', ['key', 'value'], Object.entries(DEFAULT_SETTINGS), 'ON CONFLICT (key) DO NOTHING'));
+
+  const [{ n: ns }] = await db.query('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM services');
+  if (Number(ns) === 0) {
+    await db.query(...multiInsert('services', ['icon', 'title', 'description', 'category', 'sort_order'], DEFAULT_SERVICES.map((s, i) => [...s, i])));
+  }
+  const [{ n: np }] = await db.query('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM projects');
+  if (Number(np) === 0) {
+    await db.query(...multiInsert('projects', ['title', 'description', 'tags', 'link_url', 'repo_url', 'is_ai', 'active', 'sort_order'], DEFAULT_PROJECTS.map((p, i) => [...p, i])));
+  }
+  await db.query("INSERT INTO settings (key, value) VALUES ('_schema', $1) ON CONFLICT (key) DO UPDATE SET value = $1", [SCHEMA_VERSION]);
+  return true;
+}
+
+module.exports = { createDb, migrate, schema, DEFAULT_SETTINGS };
