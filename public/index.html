@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MaiconTech | Maicon Piveta — Soluções em TI e Inteligência Artificial</title>
+  <meta name="description" content="Maicon Piveta — desenvolvedor e especialista em TI. Agentes e chatbots com IA, automação, integração de LLMs, sistemas web, nuvem e segurança da informação.">
+  <meta name="theme-color" content="#03060f">
+  <meta property="og:title" content="MaiconTech | Soluções em TI e Inteligência Artificial">
+  <meta property="og:description" content="Transformo ideias em soluções digitais com IA, tecnologia, performance e inovação.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="/img/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+  <!-- ============ CABEÇALHO ============ -->
+  <header class="header" id="topo">
+    <div class="container header__inner">
+      <a class="brand" href="#inicio" aria-label="Início">
+        <img src="/img/logo.svg" alt="" width="52" height="39">
+        <span class="brand__text">
+          <span class="brand__name" data-brand>Maicon<b>Tech</b></span>
+          <small data-s="marca_slogan">Soluções em Tecnologia &amp; IA</small>
+        </span>
+      </a>
+      <nav class="nav" id="nav" aria-label="Menu principal">
+        <a href="#inicio" class="is-active">Início</a>
+        <a href="#servicos">Serviços</a>
+        <a href="#ia">Inteligência Artificial</a>
+        <a href="#projetos">Projetos</a>
+        <a href="#sobre">Sobre</a>
+        <a href="#contato">Contato</a>
+      </nav>
+      <a class="btn btn--outline btn--sm header__cta" data-wa href="https://wa.me/5547996838633" target="_blank" rel="noopener noreferrer">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm0 1.5 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        Fale Comigo
+      </a>
+      <button class="menu-btn" id="menuBtn" aria-label="Abrir menu" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="inicio">
+      <div class="hero__bg" aria-hidden="true"></div>
+      <div class="container hero__grid">
+        <div class="hero__text reveal">
+          <p class="hero__hello" data-s="hero_saudacao">Olá, eu sou</p>
+          <h1 class="hero__name" id="heroName">Maicon <span class="accent">Piveta</span></h1>
+          <p class="hero__role" data-s="cargo">Desenvolvedor, Especialista em TI &amp; Soluções com IA</p>
+          <span class="hero__line" aria-hidden="true"></span>
+          <p class="hero__desc" data-s="hero_texto">Transformo ideias em soluções digitais com Inteligência Artificial, tecnologia, performance e inovação.</p>
+          <div class="hero__actions">
+            <a class="btn btn--primary" data-wa href="https://wa.me/5547996838633" target="_blank" rel="noopener noreferrer">Vamos Conversar <span aria-hidden="true">›</span></a>
+            <a class="btn btn--ghost" href="#projetos">Ver projetos</a>
+          </div>
+          <ul class="hero__chips" aria-label="Especialidades">
+            <li>Agentes de IA</li><li>Automação</li><li>Sistemas Web</li><li>Cloud</li><li>Segurança</li>
+          </ul>
+        </div>
+        <div class="hero__art reveal">
+          <img src="/img/hero.svg" alt="Ilustração de notebook com código e chip de Inteligência Artificial" width="640" height="480">
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SERVIÇOS ============ -->
+    <section class="section" id="servicos">
+      <div class="container">
+        <div class="section__head section__head--split reveal">
+          <div>
+            <p class="eyebrow">Meus serviços</p>
+            <h2 class="title"><span data-s="servicos_titulo">Soluções em TI e IA</span><small data-s="servicos_subtitulo">para impulsionar seu projeto.</small></h2>
+          </div>
+          <p class="lead" data-s="servicos_texto">Da ideia à implementação: automação com IA, sistemas sob medida, nuvem e segurança, com foco em qualidade e resultado.</p>
+        </div>
+        <div class="tabs reveal" role="tablist" aria-label="Filtrar serviços">
+          <button class="tab is-active" role="tab" aria-selected="true" data-filter="todos">Todos</button>
+          <button class="tab" role="tab" aria-selected="false" data-filter="ia">Inteligência Artificial</button>
+          <button class="tab" role="tab" aria-selected="false" data-filter="ti">TI &amp; Desenvolvimento</button>
+        </div>
+        <div class="cards" id="servicesGrid" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- ============ IA ============ -->
+    <section class="section section--ia" id="ia">
+      <div class="container ia__grid">
+        <div class="reveal">
+          <p class="eyebrow">Foco em Inteligência Artificial</p>
+          <h2 class="title" data-s="ia_titulo">Inteligência Artificial aplicada ao seu negócio</h2>
+          <p class="lead" data-s="ia_texto"></p>
+          <ol class="steps">
+            <li><b>01</b><div><h3>Diagnóstico</h3><p>Entendo o processo e onde a IA gera mais retorno.</p></div></li>
+            <li><b>02</b><div><h3>Protótipo rápido</h3><p>Uma versão funcional em poucos dias para validar a ideia.</p></div></li>
+            <li><b>03</b><div><h3>Integração segura</h3><p>Conexão com seus sistemas, WhatsApp e dados, respeitando a LGPD.</p></div></li>
+            <li><b>04</b><div><h3>Evolução contínua</h3><p>Monitoramento, ajustes e suporte após a entrega.</p></div></li>
+          </ol>
+        </div>
+        <div class="chat reveal" aria-label="Exemplo ilustrativo de assistente com IA">
+          <div class="chat__head">
+            <span class="chat__avatar">IA</span>
+            <div><b>Assistente Virtual</b><small><i class="dot"></i> online agora</small></div>
+          </div>
+          <div class="chat__body" id="chatDemo">
+            <p class="msg msg--bot">Olá! 👋 Sou o assistente da sua empresa. Como posso ajudar?</p>
+            <p class="msg msg--user">Qual o status do meu pedido 4821?</p>
+            <p class="msg msg--bot">Seu pedido saiu para entrega hoje às 9h e chega até as 18h. Quer que eu te avise por WhatsApp quando chegar?</p>
+            <p class="msg msg--user">Sim, por favor!</p>
+            <p class="msg msg--bot">Pronto! ✅ Aviso ativado.</p>
+          </div>
+          <p class="chat__note">Exemplo ilustrativo de um atendimento automatizado com IA.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PROJETOS ============ -->
+    <section class="section" id="projetos">
+      <div class="container">
+        <div class="section__head section__head--center reveal">
+          <p class="eyebrow eyebrow--center">Meus projetos</p>
+          <h2 class="title">Alguns dos meus trabalhos</h2>
+          <p class="lead">Clique em um projeto para conhecer o trabalho completo.</p>
+        </div>
+        <div class="projects" id="projectsGrid"></div>
+
+        <div class="repos" id="reposBlock" hidden>
+          <div class="repos__head">
+            <h3><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-github"/></svg> Repositórios no GitHub</h3>
+            <a class="link" data-github href="https://github.com/piveta10" target="_blank" rel="noopener noreferrer">Ver perfil completo ›</a>
+          </div>
+          <div class="repos__grid" id="reposGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SOBRE + CONTATO RÁPIDO ============ -->
+    <section class="section" id="sobre">
+      <div class="container about">
+        <div class="about__panel reveal">
+          <div class="about__circuit" aria-hidden="true"></div>
+          <div class="about__text">
+            <p class="eyebrow">Sobre mim</p>
+            <h2 class="title" id="aboutTitle">Tecnologia como meio para <span class="accent">evoluir.</span></h2>
+            <p data-s="sobre_texto">Sou apaixonado por tecnologia e estou sempre em busca de aprender, criar e entregar o meu melhor em cada projeto.</p>
+            <ul class="checks" id="aboutHighlights"></ul>
+            <a class="btn btn--outline" data-github href="https://github.com/piveta10" target="_blank" rel="noopener noreferrer">Conheça meu GitHub <span aria-hidden="true">›</span></a>
+          </div>
+          <div class="about__emblem" aria-hidden="true"><img src="/img/logo.svg" alt="" width="120" height="90"></div>
+        </div>
+        <aside class="about__cta reveal">
+          <p class="eyebrow">Entre em contato</p>
+          <h3 data-s="contato_titulo">Vamos conversar?</h3>
+          <p>Estou pronto para transformar sua ideia em realidade.</p>
+          <a class="btn btn--wa" data-wa href="https://wa.me/5547996838633" target="_blank" rel="noopener noreferrer">
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-wa"/></svg> Fale no WhatsApp
+          </a>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ DEPOIMENTOS (aparece quando houver) ============ -->
+    <section class="section" id="depoimentos" hidden>
+      <div class="container">
+        <div class="section__head section__head--center reveal">
+          <p class="eyebrow eyebrow--center">Depoimentos</p>
+          <h2 class="title">O que meus clientes dizem</h2>
+        </div>
+        <div class="testimonials" id="testimonialsGrid"></div>
+      </div>
+    </section>
+
+    <!-- ============ CONTATO ============ -->
+    <section class="section" id="contato">
+      <div class="container contact reveal">
+        <div class="contact__info">
+          <p class="eyebrow">Contato</p>
+          <h2 class="title" data-s="contato_titulo">Vamos conversar?</h2>
+          <p class="lead" data-s="contato_texto">Estou pronto para transformar sua ideia em realidade.</p>
+          <ul class="contact__list" id="contactList"></ul>
+        </div>
+        <form class="form" id="contactForm" novalidate>
+          <div class="form__row">
+            <label>Nome*<input name="name" required maxlength="100" autocomplete="name"></label>
+            <label>E-mail*<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
+          </div>
+          <div class="form__row">
+            <label>Telefone / WhatsApp<input name="phone" maxlength="30" autocomplete="tel" inputmode="tel"></label>
+            <label>Assunto
+              <select name="subject">
+                <option>Projeto com Inteligência Artificial</option>
+                <option>Desenvolvimento de site ou sistema</option>
+                <option>Nuvem e infraestrutura</option>
+                <option>Segurança da informação</option>
+                <option>Suporte técnico</option>
+                <option>Outro assunto</option>
+              </select>
+            </label>
+          </div>
+          <label>Mensagem*<textarea name="message" rows="5" required minlength="10" maxlength="3000"></textarea></label>
+          <!-- campo anti-robô: deve ficar vazio -->
+          <label class="hp" aria-hidden="true">Site<input name="website" tabindex="-1" autocomplete="off"></label>
+          <button class="btn btn--primary" type="submit">Enviar mensagem <span aria-hidden="true">›</span></button>
+          <p class="form__status" id="formStatus" role="status"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ RODAPÉ ============ -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <a class="brand" href="#inicio" aria-label="Voltar ao topo">
+        <img src="/img/logo.svg" alt="" width="44" height="33">
+        <span class="brand__name" data-brand>Maicon<b>Tech</b></span>
+      </a>
+      <nav class="footer__nav" aria-label="Rodapé">
+        <a href="#inicio">Início</a><a href="#servicos">Serviços</a><a href="#ia">IA</a><a href="#projetos">Projetos</a><a href="#sobre">Sobre</a><a href="#contato">Contato</a>
+      </nav>
+      <div class="socials" id="socials"></div>
+    </div>
+    <p class="footer__copy">© <span id="year">2026</span> <span data-brand-plain>MaiconTech</span>. <span data-s="rodape_texto">Todos os direitos reservados.</span></p>
+  </footer>
+
+  <a class="wa-float" data-wa href="https://wa.me/5547996838633" target="_blank" rel="noopener noreferrer" aria-label="Conversar no WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-wa"/></svg>
+  </a>
+
+  <!-- Ícones reutilizáveis -->
+  <svg width="0" height="0" class="sprite" aria-hidden="true">
+    <symbol id="ico-wa" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.3-.4.8-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.3.8 3.2.7a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.2-.2-.4-.3Z"/></symbol>
+    <symbol id="ico-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.6.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.3 4.7-4.6 4.9.4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></symbol>
+    <symbol id="ico-mail" viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm0 1.5 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="ico-linkedin" viewBox="0 0 24 24"><path fill="currentColor" d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM3 9.5h4V21H3V9.5Zm6.5 0h3.8v1.6h.1c.5-1 1.8-2 3.8-2 4 0 4.8 2.6 4.8 6V21h-4v-5.2c0-1.3 0-2.9-1.8-2.9s-2 1.4-2 2.8V21h-4V9.5Z"/></symbol>
+    <symbol id="ico-youtube" viewBox="0 0 24 24"><path fill="currentColor" d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.8 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.8 31 31 0 0 0-.5-4.8ZM9.7 15.1V8.9l5.8 3.1-5.8 3.1Z"/></symbol>
+    <symbol id="ico-instagram" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M7 2.8h10A4.2 4.2 0 0 1 21.2 7v10a4.2 4.2 0 0 1-4.2 4.2H7A4.2 4.2 0 0 1 2.8 17V7A4.2 4.2 0 0 1 7 2.8Zm5 5.2a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm5.3-1.7h.01"/></symbol>
+  </svg>
+</body>
+</html>

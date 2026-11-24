@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Painel | MaiconTech</title>
+  <link rel="icon" href="/img/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script src="/admin/admin.js" defer></script>
+</head>
+<body>
+  <!-- LOGIN -->
+  <main class="login" id="loginView" hidden>
+    <form class="login__box" id="loginForm" autocomplete="on">
+      <img src="/img/logo.svg" alt="" width="64" height="48">
+      <h1>Painel MaiconTech</h1>
+      <p class="muted">Acesso restrito ao administrador.</p>
+      <label>Usuário<input name="username" autocomplete="username" required maxlength="60"></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+      <button class="btn btn--primary" type="submit">Entrar</button>
+      <p class="msg-err" id="loginErr" role="alert"></p>
+      <a class="muted small" href="/">← Voltar ao site</a>
+    </form>
+  </main>
+
+  <!-- PAINEL -->
+  <div class="app" id="appView" hidden>
+    <aside class="side">
+      <a class="side__brand" href="/" target="_blank" rel="noopener"><img src="/img/logo.svg" alt="" width="36" height="27"> <span>Maicon<b>Tech</b></span></a>
+      <nav class="side__nav" id="sideNav">
+        <button data-view="settings" class="is-active">⚙️ Conteúdo do site</button>
+        <button data-view="services">🧩 Serviços</button>
+        <button data-view="projects">🚀 Projetos</button>
+        <button data-view="testimonials">💬 Depoimentos</button>
+        <button data-view="messages">📩 Mensagens <span class="pill" id="unread" hidden></span></button>
+        <button data-view="security">🔒 Segurança</button>
+      </nav>
+      <div class="side__foot">
+        <span class="muted small" id="whoami"></span>
+        <a class="btn btn--ghost btn--sm" href="/" target="_blank" rel="noopener">Ver site</a>
+        <button class="btn btn--ghost btn--sm" id="logoutBtn">Sair</button>
+      </div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO -->
+  <dialog class="modal" id="modal">
+    <form method="dialog" class="modal__box" id="modalForm" novalidate>
+      <header class="modal__head"><h2 id="modalTitle">Editar</h2><button type="button" class="x" id="modalClose" aria-label="Fechar">×</button></header>
+      <div class="modal__body" id="modalBody"></div>
+      <p class="msg-err" id="modalErr" role="alert"></p>
+      <footer class="modal__foot">
+        <button type="button" class="btn btn--ghost" id="modalCancel">Cancelar</button>
+        <button type="submit" class="btn btn--primary">Salvar</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
