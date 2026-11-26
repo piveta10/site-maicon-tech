@@ -1,5 +1,5 @@
 /* =========================================================
-   MaiconTech — Painel administrativo
+   Vivix — Painel administrativo
    Para adicionar novos campos/configurações: edite SETTINGS_GROUPS
    ou ENTITY_FORMS abaixo (e a lista DEFAULT_SETTINGS em src/db.js).
    ========================================================= */
@@ -27,10 +27,11 @@
   const SETTINGS_GROUPS = [
     { title: 'Identidade', fields: [
       ['marca', 'Nome da marca'], ['marca_slogan', 'Slogan da marca'],
-      ['nome', 'Seu nome (a última palavra fica em azul)'], ['cargo', 'Cargo / especialidade']
+      ['nome', 'Seu nome (aparece em "Sobre")'], ['cargo', 'Cargo / especialidade (aparece em "Sobre")']
     ] },
     { title: 'Início (topo do site)', fields: [
-      ['hero_saudacao', 'Saudação'], ['hero_texto', 'Texto de apresentação', 'textarea']
+      ['hero_selo', 'Selo acima do título'], ['hero_titulo', 'Título principal (a última palavra fica em destaque)'],
+      ['hero_texto', 'Texto de apresentação', 'textarea']
     ] },
     { title: 'Seção de serviços', fields: [
       ['servicos_titulo', 'Título'], ['servicos_subtitulo', 'Subtítulo'], ['servicos_texto', 'Texto lateral', 'textarea']
@@ -38,7 +39,7 @@
     { title: 'Seção de Inteligência Artificial', fields: [
       ['ia_titulo', 'Título'], ['ia_texto', 'Texto', 'textarea']
     ] },
-    { title: 'Sobre mim', fields: [
+    { title: 'Sobre', fields: [
       ['sobre_titulo', 'Título (a última palavra fica em azul)'], ['sobre_texto', 'Texto', 'textarea'],
       ['sobre_destaques', 'Destaques (um por linha)', 'textarea']
     ] },

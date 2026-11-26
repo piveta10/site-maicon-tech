@@ -1,5 +1,5 @@
 /* =========================================================
-   MaiconTech — script do site público
+   Vivix — script do site público
    Todo o conteúdo vem do banco de dados via /api/site e é
    inserido apenas com textContent (nunca como HTML), o que
    impede ataques de XSS.
@@ -91,16 +91,14 @@
       if (typeof v === 'string' && v.trim()) n.textContent = v;
     });
 
-    // Marca: "MaiconTech" -> Maicon + <b>Tech</b>
-    const brand = s.marca || 'MaiconTech';
+    // Marca: "MaiconTech" -> Maicon + <b>Tech</b> ("Vivix" fica inteira)
+    const brand = s.marca || 'Vivix';
     const m = brand.match(/^(.+?)([A-Z][a-z0-9]+)$/);
     $$('[data-brand]').forEach((n) => n.replaceChildren(m ? m[1] : brand, m ? el('b', { text: m[2] }) : ''));
     $$('[data-brand-plain]').forEach((n) => { n.textContent = brand; });
 
-    if (s.nome) {
-      accentLast($('#heroName'), s.nome);
-      document.title = `${brand} | ${s.nome} — ${s.marca_slogan || 'Soluções em TI e IA'}`;
-    }
+    if (s.hero_titulo) accentLast($('#heroTitle'), s.hero_titulo);
+    document.title = `${brand} — ${s.marca_slogan || 'Tecnologia e Inteligência Artificial'}`;
     if (s.sobre_titulo) accentLast($('#aboutTitle'), s.sobre_titulo);
 
     // WhatsApp

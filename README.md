@@ -1,6 +1,6 @@
-# MaiconTech — Site de Tecnologia e IA
+# Vivix — Site de Tecnologia e IA
 
-Site profissional de **Maicon Piveta** com foco em Inteligência Artificial, painel administrativo para editar tudo, banco de dados **Neon (Postgres)** e hospedagem na **Vercel**.
+Site da **Vivix**, empresa de **Maicon Piveta**, com foco em Inteligência Artificial, painel administrativo para editar tudo, banco de dados **Neon (Postgres)** e hospedagem na **Vercel**.
 
 - **Tudo editável** pelo painel `/admin`: textos, contatos, WhatsApp, e-mail, redes sociais, serviços, projetos (com link e imagem), depoimentos e mensagens.
 - **Banco de dados**: Neon Postgres em produção. Para testar no seu computador sem configurar nada, o site usa automaticamente um SQLite local.

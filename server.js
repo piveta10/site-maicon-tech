@@ -1,6 +1,6 @@
 'use strict';
 /**
- * MaiconTech — servidor LOCAL (para testar no seu computador).
+ * Vivix — servidor LOCAL (para testar no seu computador).
  * Na Vercel, quem roda é o arquivo api/index.js.
  *
  * Iniciar:  node server.js   (ou: npm.cmd start no PowerShell)
@@ -48,7 +48,7 @@ app.ready().then(() => {
   server.maxHeadersCount = 60;
   server.listen(PORT, HOST, () => {
     const banco = process.env.DATABASE_URL ? 'Neon Postgres' : 'SQLite local (data/site.db)';
-    console.log(`✔ MaiconTech rodando em http://localhost:${PORT}`);
+    console.log(`✔ Vivix rodando em http://localhost:${PORT}`);
     console.log(`  Painel administrativo: http://localhost:${PORT}/admin`);
     console.log(`  Banco de dados: ${banco}`);
   });

@@ -1,7 +1,7 @@
 {
   "name": "maicontech-site",
   "version": "1.0.0",
-  "description": "Site MaiconTech — Soluções em TI e Inteligência Artificial (Maicon Piveta)",
+  "description": "Site Vivix — Tecnologia e Inteligência Artificial (Maicon Piveta)",
   "main": "server.js",
   "private": true,
   "scripts": {
