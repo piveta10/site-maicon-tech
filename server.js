@@ -29,7 +29,15 @@ const app = createApp({
   https: process.env.HTTPS === '1',
   trustProxy: process.env.TRUST_PROXY === '1',
   adminUser: process.env.ADMIN_USER || 'admin',
-  adminPassword
+  adminPassword,
+  whatsapp: {
+    token: process.env.WHATSAPP_TOKEN,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
+    appSecret: process.env.WHATSAPP_APP_SECRET,
+    aiKey: process.env.AI_GATEWAY_API_KEY,
+    aiModel: process.env.AI_MODEL
+  }
 });
 
 app.ready().then(() => {

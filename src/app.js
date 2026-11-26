@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { createDb, migrate, DEFAULT_SETTINGS } = require('./db');
+const { createWhatsApp } = require('./whatsapp');
 const S = require('./security');
 
 const MIME = {
@@ -76,7 +77,8 @@ function createApp(opts = {}) {
     login: new DbRateLimiter(db, 'login', { windowMs: 15 * 60_000, max: 5 }),        // 5 falhas / 15 min por IP
     loginUser: new DbRateLimiter(db, 'loginuser', { windowMs: 15 * 60_000, max: 10 }), // 10 falhas / 15 min por usuário
     contact: new DbRateLimiter(db, 'contact', { windowMs: 60 * 60_000, max: 5 }),      // 5 mensagens / hora por IP
-    api: new S.RateLimiter({ windowMs: 60_000, max: opts.apiMax || 240 })             // geral, por instância
+    api: new S.RateLimiter({ windowMs: 60_000, max: opts.apiMax || 240 }),            // geral, por instância
+    whatsapp: new DbRateLimiter(db, 'wa', { windowMs: 60 * 60_000, max: 30 })          // 30 respostas da IA / hora por número
   };
 
   // ---------------- Inicialização (tabelas + primeiro admin) ----------------
@@ -225,6 +227,12 @@ function createApp(opts = {}) {
     return { settings, services, projects, testimonials };
   }
 
+  // ---------------- WhatsApp com IA ----------------
+  const wa = createWhatsApp({
+    db, getSettings, config: opts.whatsapp || {}, fetch: opts.fetch, limiter: limits.whatsapp,
+    log: (...a) => log(...a)
+  });
+
   // ---------------- Validação de entidades ----------------
   const ENTITIES = {
     services: {
@@ -294,7 +302,8 @@ function createApp(opts = {}) {
       if (u && !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(u)) throw new S.ValidationError('Usuário do GitHub inválido.');
       return u;
     }
-    if (key === 'mostrar_repos_github') return S.toBool(value) ? '1' : '0';
+    if (key === 'mostrar_repos_github' || key === 'ia_ativa') return S.toBool(value) ? '1' : '0';
+    if (key === 'ia_conhecimento') return S.cleanText(value, 12000, { multiline: true });
     return S.cleanText(value, 3000, { multiline: true });
   }
 
@@ -326,6 +335,17 @@ function createApp(opts = {}) {
       await db.query('INSERT INTO messages (name, email, phone, subject, message, ip_hash, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
         [name, email, phone, subject, message, S.sha256(ip).slice(0, 16), Date.now()]);
       return send(res, 201, { ok: true, mensagem: 'Mensagem enviada! Retornarei em breve.' });
+    }
+
+    // ---- WhatsApp (webhook da Meta) ----
+    if (p === '/api/whatsapp' && m === 'GET') {
+      const v = wa.verify(url);
+      return send(res, v.status, v.body, { 'Content-Type': 'text/plain; charset=utf-8' });
+    }
+    if (p === '/api/whatsapp' && m === 'POST') {
+      const raw = await readBody(req, 512 * 1024);
+      const status = await wa.receive(raw, req.headers['x-hub-signature-256']);
+      return send(res, status, status === 200 ? { ok: true } : { erro: 'Recusado.' });
     }
 
     // ---- Autenticação ----
@@ -372,11 +392,15 @@ function createApp(opts = {}) {
     const sess = await requireAdmin(req, { mutating });
 
     if (p === '/api/admin/data' && m === 'GET') {
-      const [[{ n }], content] = await Promise.all([
+      const [[{ n }], [{ n: wn }], content] = await Promise.all([
         db.query('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM messages WHERE is_read = 0'),
+        db.query('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM wa_conversations WHERE unread = 1'),
         getContent({ includeInactive: true })
       ]);
-      return send(res, 200, { ...content, icons: ICONS, unread: Number(n) });
+      return send(res, 200, {
+        ...content, icons: ICONS, unread: Number(n), waUnread: Number(wn),
+        whatsapp: { configurado: wa.configured(), iaConfigurada: wa.aiConfigured() }
+      });
     }
 
     if (p === '/api/admin/settings' && m === 'PUT') {
@@ -469,6 +493,52 @@ function createApp(opts = {}) {
       await db.query('DELETE FROM sessions WHERE admin_id = $1 AND token_hash <> $2 RETURNING token_hash', [admin.id, sess.token_hash]);
       await audit(admin.id, 'password.change');
       return send(res, 200, { ok: true });
+    }
+
+    // Conversas do WhatsApp
+    if (p === '/api/admin/whatsapp' && m === 'GET') {
+      return send(res, 200, await db.query(
+        `SELECT c.id, c.wa_id, c.name, c.status, c.unread, c.last_at,
+           (SELECT text FROM wa_messages w WHERE w.conversation_id = c.id ORDER BY w.id DESC LIMIT 1) AS last_text
+         FROM wa_conversations c ORDER BY c.last_at DESC LIMIT 300`));
+    }
+    mm = p.match(/^\/api\/admin\/whatsapp\/(\d{1,9})(\/reply)?$/);
+    if (mm) {
+      const id = Number(mm[1]);
+      if (mm[2]) {
+        if (m !== 'POST') throw new HttpError(405, 'Método não permitido.');
+        const b = await readJson(req);
+        const text = S.cleanText(b.text, 3000, { multiline: true });
+        if (!text) throw new S.ValidationError('Escreva a mensagem.');
+        let conv;
+        try { conv = await wa.replyManual(id, text); } catch (e) { throw new HttpError(502, e.message); }
+        if (!conv) throw new HttpError(404, 'Conversa não encontrada.');
+        await audit(sess.admin_id, 'whatsapp.reply', id);
+        return send(res, 200, { ok: true });
+      }
+      if (m === 'GET') {
+        const [conv] = await db.query('SELECT id, wa_id, name, status, unread, last_at FROM wa_conversations WHERE id = $1', [id]);
+        if (!conv) throw new HttpError(404, 'Conversa não encontrada.');
+        await db.query('UPDATE wa_conversations SET unread = 0 WHERE id = $1 RETURNING id', [id]);
+        const msgs = await db.query('SELECT role, text, created_at FROM wa_messages WHERE conversation_id = $1 ORDER BY id DESC LIMIT 200', [id]);
+        return send(res, 200, { ...conv, messages: msgs.reverse() });
+      }
+      if (m === 'PATCH') {
+        const b = await readJson(req);
+        const status = b.status === 'humano' ? 'humano' : 'ia';
+        const r = await db.query('UPDATE wa_conversations SET status = $1 WHERE id = $2 RETURNING id', [status, id]);
+        if (!r.length) throw new HttpError(404, 'Conversa não encontrada.');
+        await audit(sess.admin_id, 'whatsapp.status', `${id}:${status}`);
+        return send(res, 200, { ok: true });
+      }
+      if (m === 'DELETE') {
+        await db.query('DELETE FROM wa_messages WHERE conversation_id = $1 RETURNING id', [id]);
+        const r = await db.query('DELETE FROM wa_conversations WHERE id = $1 RETURNING id', [id]);
+        if (!r.length) throw new HttpError(404, 'Conversa não encontrada.');
+        await audit(sess.admin_id, 'whatsapp.delete', id);
+        return send(res, 200, { ok: true });
+      }
+      throw new HttpError(405, 'Método não permitido.');
     }
 
     if (p === '/api/admin/audit' && m === 'GET') {

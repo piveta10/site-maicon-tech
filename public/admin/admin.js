@@ -57,7 +57,13 @@
       ['instagram', 'Link do Instagram', 'url', 'https://instagram.com/...'],
       ['youtube', 'Link do YouTube', 'url', 'https://youtube.com/@...']
     ] },
-    { title: 'Rodapé', fields: [['rodape_texto', 'Texto do rodapé']] }
+    { title: 'Rodapé', fields: [['rodape_texto', 'Texto do rodapé']] },
+    { title: 'Assistente de IA no WhatsApp', fields: [
+      ['ia_ativa', 'Ativar respostas automáticas da IA no WhatsApp', 'checkbox'],
+      ['ia_boas_vindas', 'Mensagem de boas-vindas (quando o cliente só diz "oi")', 'textarea'],
+      ['ia_mensagem_humano', 'Mensagem ao passar a conversa para você', 'textarea'],
+      ['ia_conhecimento', 'Base de conhecimento: perguntas frequentes, passo a passo, horários, formas de pagamento… A IA responde SOMENTE com base neste texto e nos serviços cadastrados.', 'textarea']
+    ] }
   ];
 
   const ICON_LABELS = {
@@ -108,7 +114,7 @@
   };
 
   // ---------------- Estado e API ----------------
-  const state = { csrf: '', data: null, icons: [], view: 'settings' };
+  const state = { csrf: '', data: null, icons: [], view: 'settings', waConv: null };
 
   async function api(path, { method = 'GET', body, raw, type } = {}) {
     const headers = {};
@@ -162,11 +168,13 @@
     state.icons = state.data.icons;
     const u = $('#unread');
     u.hidden = !state.data.unread; u.textContent = state.data.unread;
+    const w = $('#waUnread');
+    w.hidden = !state.data.waUnread; w.textContent = state.data.waUnread;
   }
 
   // ---------------- Navegação ----------------
   $$('#sideNav button').forEach((b) => b.addEventListener('click', () => {
-    state.view = b.dataset.view;
+    state.view = b.dataset.view; state.waConv = null;
     $$('#sideNav button').forEach((x) => x.classList.toggle('is-active', x === b));
     render();
   }));
@@ -178,6 +186,10 @@
     else if (ENTITY_FORMS[v]) main.replaceChildren(viewEntity(v));
     else if (v === 'messages') { main.replaceChildren(el('p', { class: 'muted', text: 'Carregando…' })); viewMessages().then((n) => main.replaceChildren(n)).catch((e) => toast(e.message, true)); }
     else if (v === 'security') { main.replaceChildren(viewSecurity()); }
+    else if (v === 'whatsapp') {
+      main.replaceChildren(el('p', { class: 'muted', text: 'Carregando…' }));
+      (state.waConv ? viewWaConversation(state.waConv) : viewWhatsApp()).then((n) => main.replaceChildren(n)).catch((e) => toast(e.message, true));
+    }
   }
 
   const head = (title, desc, action) => el('div', { class: 'page-head' }, [el('div', {}, [el('h1', { text: title }), desc ? el('p', { text: desc }) : null]), action || null]);
@@ -190,7 +202,7 @@
       const grid = el('div', { class: 'grid2' });
       for (const [key, label, type = 'text', ph] of g.fields) {
         let input;
-        if (type === 'textarea') input = el('textarea', { name: key, value: s[key] || '', rows: key === 'sobre_destaques' ? 5 : 3 });
+        if (type === 'textarea') input = el('textarea', { name: key, value: s[key] || '', rows: key === 'ia_conhecimento' ? 14 : key === 'sobre_destaques' ? 5 : 3 });
         else if (type === 'checkbox') { grid.append(el('label', { class: 'check full' }, [el('input', { type: 'checkbox', name: key, checked: s[key] === '1' }), label])); continue; }
         else input = el('input', { name: key, type, value: s[key] || '', placeholder: ph });
         grid.append(el('label', { class: type === 'textarea' ? 'full' : '' }, [label, input]));
@@ -330,6 +342,76 @@
       ]));
     }
     return el('div', {}, [head('Mensagens', 'Contatos enviados pelo formulário do site.'), list]);
+  }
+
+  // ---------------- WhatsApp com IA ----------------
+  const fmtDate = (t) => new Date(Number(t)).toLocaleString('pt-BR');
+  const fmtPhone = (d) => { const m = String(d).match(/^55(\d{2})(\d{4,5})(\d{4})$/); return m ? `+55 (${m[1]}) ${m[2]}-${m[3]}` : '+' + d; };
+
+  function waStatusBox() {
+    const w = state.data.whatsapp || {};
+    const on = state.data.settings.ia_ativa === '1';
+    const item = (ok, text) => el('li', { class: ok ? 'ok' : 'pend' }, [ok ? '✓ ' : '• ', text]);
+    return el('section', { class: 'group' }, [
+      el('h3', { text: 'Situação' }),
+      el('ul', { class: 'status-list' }, [
+        item(w.configurado, w.configurado ? 'WhatsApp conectado (variáveis WHATSAPP_* configuradas).' : 'WhatsApp ainda não conectado: configure as variáveis WHATSAPP_* na Vercel (veja o README).'),
+        item(w.iaConfigurada, w.iaConfigurada ? 'Chave da IA configurada (AI_GATEWAY_API_KEY).' : 'Falta a chave da IA: AI_GATEWAY_API_KEY na Vercel.'),
+        item(on, on ? 'Respostas automáticas ATIVADAS.' : 'Respostas automáticas desativadas: ative em Conteúdo do site → Assistente de IA no WhatsApp.')
+      ])
+    ]);
+  }
+
+  async function viewWhatsApp() {
+    const convs = await api('/api/admin/whatsapp');
+    const list = el('div', { class: 'list' });
+    if (!convs.length) list.append(el('p', { class: 'muted', text: 'Nenhuma conversa ainda. Quando um cliente mandar mensagem no WhatsApp, ela aparece aqui.' }));
+    for (const c of convs) {
+      list.append(el('button', { class: 'row row--btn' + (c.unread ? ' is-new' : ''), type: 'button', onclick: () => { state.waConv = c.id; render(); } }, [
+        el('div', { class: 'row__main' }, [
+          el('b', {}, [c.name || fmtPhone(c.wa_id),
+            c.status === 'humano' ? el('span', { class: 'tag tag--warn', text: 'aguardando você' }) : el('span', { class: 'tag', text: 'IA' }),
+            c.unread ? el('span', { class: 'tag', text: 'nova' }) : null]),
+          el('span', { text: c.last_text || '' })
+        ]),
+        el('span', { class: 'meta', text: fmtDate(c.last_at) })
+      ]));
+    }
+    return el('div', {}, [head('WhatsApp com IA', 'Conversas atendidas pela assistente. As que pedem uma pessoa ficam marcadas como "aguardando você".'), waStatusBox(), list]);
+  }
+
+  async function viewWaConversation(id) {
+    const c = await api(`/api/admin/whatsapp/${id}`);
+    await reload();
+    const roleLabel = { cliente: c.name || 'Cliente', ia: 'Assistente (IA)', humano: 'Você' };
+    const chat = el('div', { class: 'wa-chat' }, c.messages.map((m) => el('div', { class: 'wa-msg wa-msg--' + m.role }, [
+      el('small', { text: `${roleLabel[m.role] || m.role} · ${fmtDate(m.created_at)}` }),
+      el('p', { text: m.text })
+    ])));
+    const txt = el('textarea', { rows: 3, maxlength: 3000, placeholder: 'Escreva sua resposta… (a Meta só permite responder até 24h após a última mensagem do cliente)' });
+    const sendBtn = el('button', { class: 'btn btn--primary', type: 'submit', text: 'Enviar pelo WhatsApp' });
+    const form = el('form', { class: 'wa-reply' }, [txt, sendBtn]);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); if (!txt.value.trim()) return;
+      sendBtn.disabled = true;
+      try { await api(`/api/admin/whatsapp/${id}/reply`, { method: 'POST', body: { text: txt.value } }); toast('Mensagem enviada.'); render(); }
+      catch (err) { toast(err.message, true); }
+      finally { sendBtn.disabled = false; }
+    });
+    const isHuman = c.status === 'humano';
+    const actions = el('div', { class: 'row__actions' }, [
+      el('button', { class: 'btn btn--ghost btn--sm', text: '← Voltar', onclick: () => { state.waConv = null; render(); } }),
+      el('button', { class: 'btn btn--ghost btn--sm', text: isHuman ? 'Devolver para a IA' : 'Assumir conversa (pausar IA)', onclick: async () => {
+        try { await api(`/api/admin/whatsapp/${id}`, { method: 'PATCH', body: { status: isHuman ? 'ia' : 'humano' } }); render(); } catch (e) { toast(e.message, true); }
+      } }),
+      el('a', { class: 'btn btn--ghost btn--sm', href: 'https://wa.me/' + c.wa_id, target: '_blank', rel: 'noopener noreferrer', text: 'Abrir no WhatsApp' }),
+      el('button', { class: 'btn btn--danger btn--sm', text: 'Excluir', onclick: async () => {
+        if (!confirm('Excluir esta conversa e todas as mensagens? Não pode ser desfeito.')) return;
+        try { await api(`/api/admin/whatsapp/${id}`, { method: 'DELETE' }); state.waConv = null; await reload(); render(); toast('Conversa excluída.'); } catch (e) { toast(e.message, true); }
+      } })
+    ]);
+    const title = `${c.name || 'Cliente'} · ${fmtPhone(c.wa_id)}`;
+    return el('div', {}, [head(title, isHuman ? 'Aguardando você: a IA está pausada nesta conversa.' : 'A IA está respondendo esta conversa.', actions), chat, form]);
   }
 
   // ---------------- Segurança ----------------

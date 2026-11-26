@@ -96,6 +96,25 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   count    INTEGER NOT NULL,
   reset_at ${BIG} NOT NULL
 );
+CREATE TABLE IF NOT EXISTS wa_conversations (
+  id         ${ID},
+  wa_id      TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'ia',
+  unread     INTEGER NOT NULL DEFAULT 0,
+  msg_count  INTEGER NOT NULL DEFAULT 0,
+  last_at    ${BIG} NOT NULL,
+  created_at ${BIG} NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wa_messages (
+  id              ${ID},
+  conversation_id INTEGER NOT NULL REFERENCES wa_conversations(id) ON DELETE CASCADE,
+  wa_msg_id       TEXT UNIQUE,
+  role            TEXT NOT NULL,
+  text            TEXT NOT NULL,
+  created_at      ${BIG} NOT NULL
+);
+CREATE INDEX IF NOT EXISTS wa_messages_conv ON wa_messages (conversation_id, id);
 `;
 }
 
@@ -130,7 +149,24 @@ const DEFAULT_SETTINGS = {
   youtube: '',
   instagram: '',
   mostrar_repos_github: '1',
-  rodape_texto: 'Todos os direitos reservados.'
+  rodape_texto: 'Todos os direitos reservados.',
+  // Assistente de IA no WhatsApp
+  ia_ativa: '0',
+  ia_boas_vindas: 'Olá! Sou a assistente virtual da Vivix. Posso tirar dúvidas sobre nossos serviços, explicar o passo a passo de um projeto ou chamar o Maicon. Como posso ajudar?',
+  ia_mensagem_humano: 'Certo! Já avisei o Maicon e passei um resumo da nossa conversa. Ele responde por aqui assim que possível, em horário comercial.',
+  ia_conhecimento: [
+    'COMO FUNCIONA UM PROJETO (passo a passo):',
+    '1. Diagnóstico: uma conversa rápida para entender a necessidade e onde a tecnologia ou a IA geram mais resultado.',
+    '2. Proposta: o cliente recebe por escrito o escopo, o prazo e o valor.',
+    '3. Protótipo: uma primeira versão funcionando para validar a ideia.',
+    '4. Entrega e suporte: publicação, ajustes e acompanhamento depois da entrega.',
+    '',
+    'PREÇOS: dependem do escopo de cada projeto. Não informe valores; ofereça agendar o diagnóstico com o Maicon.',
+    '',
+    'ATENDIMENTO: online, para todo o Brasil. Projetos com IA seguem a LGPD.',
+    '',
+    '(Edite este texto no painel: inclua perguntas frequentes, horários, formas de pagamento e o que mais a IA deve saber.)'
+  ].join('\n')
 };
 
 const DEFAULT_SERVICES = [

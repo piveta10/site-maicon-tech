@@ -5,7 +5,8 @@ Site da **Vivix**, empresa de **Maicon Piveta**, com foco em Inteligência Artif
 - **Tudo editável** pelo painel `/admin`: textos, contatos, WhatsApp, e-mail, redes sociais, serviços, projetos (com link e imagem), depoimentos e mensagens.
 - **Banco de dados**: Neon Postgres em produção. Para testar no seu computador sem configurar nada, o site usa automaticamente um SQLite local.
 - **Imagens enviadas** pelo painel ficam guardadas no próprio banco (não precisa de outro serviço).
-- **88 testes de segurança** automatizados.
+- **Assistente de IA no WhatsApp** (opcional): responde dúvidas e explica o passo a passo usando o conteúdo do painel, e passa a conversa para você quando o cliente pede.
+- **100 testes de segurança** automatizados.
 
 ---
 
@@ -101,7 +102,7 @@ Esqueceu a senha do site publicado? Coloque a `DATABASE_URL` do Neon no seu `.en
 npm.cmd test
 ```
 
-**88 testes automatizados**, executados tanto em SQLite quanto em **Postgres real** (mesmo motor do Neon):
+**100 testes automatizados**, executados tanto em SQLite quanto em **Postgres real** (mesmo motor do Neon):
 
 | Área | O que é testado |
 |---|---|
@@ -120,13 +121,59 @@ Para rodar os testes em Postgres: `TEST_DB=pg` com o `psql` instalado (variávei
 
 ---
 
-## 5. Estrutura
+## 5. Assistente de IA no WhatsApp
+
+A assistente atende pelo **WhatsApp oficial (API da Meta)**, responde com base nos **serviços** e na **Base de conhecimento** do painel e, quando o cliente pede uma pessoa (ou a IA não sabe responder), **pausa e passa a conversa para você**. Tudo fica em **Painel → WhatsApp IA**, onde você lê as conversas, assume, devolve para a IA e responde.
+
+### Passo 1 — Meta (WhatsApp Business Platform)
+1. Em https://developers.facebook.com crie um app do tipo **Empresa** e adicione o produto **WhatsApp**.
+2. Conecte o número. Para continuar usando o **mesmo número no app WhatsApp Business** do celular, escolha a opção de *Coexistence* no cadastro (Embedded Signup). Se ela não aparecer, use um número novo só para a empresa.
+3. Anote:
+   - **Phone number ID** (WhatsApp → Configuração da API);
+   - **Token de acesso permanente** (crie um *Usuário do sistema* no Gerenciador de Negócios com a permissão `whatsapp_business_messaging`) — o token temporário de teste expira em 24h;
+   - **Chave secreta do app** (Configurações do app → Básico).
+
+### Passo 2 — Chave da IA (Vercel AI Gateway)
+Na Vercel: **AI Gateway → API Keys → Create key**. Um único crédito serve para vários modelos (Claude, GPT, Gemini…). O modelo padrão é `anthropic/claude-haiku-5.5`; para trocar, use a variável `AI_MODEL` com um ID da lista de modelos do AI Gateway.
+
+### Passo 3 — Variáveis na Vercel (Settings → Environment Variables)
+| Nome | Valor |
+|---|---|
+| `WHATSAPP_TOKEN` | token permanente da Meta |
+| `WHATSAPP_PHONE_NUMBER_ID` | Phone number ID |
+| `WHATSAPP_APP_SECRET` | chave secreta do app (valida que as mensagens vêm mesmo da Meta) |
+| `WHATSAPP_VERIFY_TOKEN` | uma senha que você inventa (ex.: `vivix-` + letras aleatórias) |
+| `AI_GATEWAY_API_KEY` | chave do AI Gateway |
+| `AI_MODEL` | opcional |
+
+Depois: **Deployments → ⋯ → Redeploy**.
+
+### Passo 4 — Ligar o webhook na Meta
+WhatsApp → **Configuração** → Webhook:
+- **URL de retorno:** `https://SEU-SITE/api/whatsapp`
+- **Token de verificação:** o mesmo de `WHATSAPP_VERIFY_TOKEN`
+- Clique em **Verificar e salvar** e assine o campo **messages**.
+
+### Passo 5 — Painel
+1. **Conteúdo do site → Assistente de IA no WhatsApp**: revise a **Base de conhecimento** (perguntas frequentes, passo a passo, horários, formas de pagamento). A IA responde **somente** com base nela e nos serviços cadastrados; nunca inventa preços.
+2. Marque **Ativar respostas automáticas** e salve.
+3. Mande um "oi" para o número: a assistente responde com botões.
+
+### Custos e cuidados
+- **Meta:** cobra por mensagem enviada; cada número tem uma franquia mensal de mensagens de atendimento gratuitas (confira os valores atuais em developers.facebook.com → WhatsApp → Pricing).
+- **IA:** cada resposta consome créditos do AI Gateway. Há um limite de **30 respostas por hora por número** para evitar abuso.
+- **Privacidade (LGPD / PIPEDA):** as conversas ficam no seu banco Neon. Avise no site que o atendimento pelo WhatsApp usa IA e exclua conversas que não precisar mais (botão **Excluir** no painel).
+
+---
+
+## 6. Estrutura
 
 ```
 api/index.js           → função serverless da Vercel (atende /api e /uploads)
 vercel.json            → configuração da Vercel (pasta pública, rotas, cabeçalhos)
 server.js              → servidor local para testes
 src/app.js             → rotas, API, segurança das requisições
+src/whatsapp.js        → assistente de IA no WhatsApp (webhook, IA, envio)
 src/db.js              → tabelas, conteúdo inicial, conexão Neon/SQLite
 src/security.js        → senhas, tokens, validação, cabeçalhos
 src/env.js             → leitura do arquivo .env

@@ -514,3 +514,179 @@ describe('9. Configuração para a Vercel', () => {
     } finally { await tdb.drop(); fs.rmSync(tdbDir, { recursive: true, force: true }); }
   });
 });
+
+// =========================================================
+describe('10. WhatsApp com IA (webhook da Meta)', () => {
+  const WA = { token: 'tok-meta-123', phoneNumberId: '1098765', verifyToken: 'verifica-123', appSecret: 'segredo-do-app', aiKey: 'chave-ia', aiModel: 'teste/modelo' };
+  const crypto = require('node:crypto');
+  const sign = (raw, secret = WA.appSecret) => 'sha256=' + crypto.createHmac('sha256', secret).update(raw).digest('hex');
+
+  /** fetch falso: grava as chamadas e responde como a Meta / a IA */
+  function fakeFetch() {
+    const calls = { graph: [], ai: [] };
+    let aiReply = 'Resposta da IA.'; let aiFail = false;
+    const fn = async (url, init) => {
+      const body = JSON.parse(init.body);
+      if (String(url).startsWith('https://graph.facebook.com/')) {
+        calls.graph.push({ url: String(url), auth: init.headers.Authorization, body });
+        return new Response(JSON.stringify({ messages: [{ id: 'wamid.out' }] }), { status: 200 });
+      }
+      calls.ai.push({ url: String(url), auth: init.headers.Authorization, body });
+      if (aiFail) return new Response('{}', { status: 500 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: aiReply } }] }), { status: 200 });
+    };
+    return { fn, calls, setReply: (t) => { aiReply = t; }, setFail: (v) => { aiFail = v; } };
+  }
+
+  let n = 0;
+  const payload = (text, { from = '5547999990000', id, button } = {}) => JSON.stringify({
+    object: 'whatsapp_business_account',
+    entry: [{ changes: [{ field: 'messages', value: {
+      contacts: [{ wa_id: from, profile: { name: 'Cliente Teste' } }],
+      messages: [button
+        ? { from, id: id || `wamid.${++n}`, type: 'interactive', interactive: { type: 'button_reply', button_reply: { id: button, title: text } } }
+        : { from, id: id || `wamid.${++n}`, type: 'text', text: { body: text } }]
+    } }] }]
+  });
+  const post = (s, raw, sig = sign(raw)) => req(s.base, 'POST', '/api/whatsapp', { body: raw, headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': sig } });
+
+  let s; let ff;
+  before(async () => {
+    ff = fakeFetch();
+    s = await startServer({ whatsapp: WA, fetch: ff.fn });
+    await s.app.db.query("UPDATE settings SET value = '1' WHERE key = 'ia_ativa' RETURNING key");
+  });
+  after(() => s.close());
+
+  test('verificação do webhook só aceita o token correto', async () => {
+    const ok = await req(s.base, 'GET', '/api/whatsapp?hub.mode=subscribe&hub.verify_token=verifica-123&hub.challenge=987654');
+    assert.equal(ok.status, 200); assert.equal(ok.text, '987654');
+    assert.equal((await req(s.base, 'GET', '/api/whatsapp?hub.mode=subscribe&hub.verify_token=errado&hub.challenge=1')).status, 403);
+    // challenge com HTML não é refletido (evita XSS)
+    assert.equal((await req(s.base, 'GET', '/api/whatsapp?hub.mode=subscribe&hub.verify_token=verifica-123&hub.challenge=%3Cscript%3E')).status, 403);
+  });
+
+  test('sem WhatsApp configurado o webhook fica fechado', async () => {
+    const v = await startServer();
+    try {
+      assert.equal((await req(v.base, 'GET', '/api/whatsapp?hub.mode=subscribe&hub.verify_token=&hub.challenge=1')).status, 403);
+      const raw = payload('oi');
+      assert.equal((await post(v, raw)).status, 503);
+    } finally { await v.close(); }
+  });
+
+  test('mensagem sem assinatura ou com assinatura falsa é recusada', async () => {
+    const raw = payload('Quanto custa?');
+    assert.equal((await post(s, raw, '')).status, 401);
+    assert.equal((await post(s, raw, sign(raw, 'outro-segredo'))).status, 401);
+    assert.equal((await post(s, raw, sign(raw + ' '))).status, 401);
+    assert.equal(ff.calls.ai.length, 0);
+    const [{ c }] = await s.app.db.query('SELECT CAST(COUNT(*) AS INTEGER) AS c FROM wa_messages');
+    assert.equal(Number(c), 0);
+  });
+
+  test('primeiro "oi" recebe boas-vindas com botões', async () => {
+    const before = ff.calls.graph.length;
+    assert.equal((await post(s, payload('oi', { from: '5547911110001' }))).status, 200);
+    const sent = ff.calls.graph[before];
+    assert.equal(sent.auth, 'Bearer tok-meta-123');
+    assert.match(sent.url, /\/1098765\/messages$/);
+    assert.equal(sent.body.to, '5547911110001');
+    assert.equal(sent.body.type, 'interactive');
+    assert.equal(sent.body.interactive.action.buttons.length, 3);
+    for (const b of sent.body.interactive.action.buttons) assert.ok(b.reply.title.length <= 20);
+  });
+
+  test('pergunta é respondida pela IA com base no conteúdo do painel', async () => {
+    ff.setReply('Temos chatbots com IA para clínicas.');
+    const aiBefore = ff.calls.ai.length; const gBefore = ff.calls.graph.length;
+    assert.equal((await post(s, payload('Vocês fazem chatbot para clínica?', { from: '5547922220002' }))).status, 200);
+    const ai = ff.calls.ai[aiBefore];
+    assert.equal(ai.auth, 'Bearer chave-ia');
+    assert.equal(ai.body.model, 'teste/modelo');
+    const sys = ai.body.messages[0].content;
+    assert.match(sys, /Agentes e Chatbots com IA/); // serviços do banco
+    assert.match(sys, /COMO FUNCIONA UM PROJETO/); // base de conhecimento
+    assert.equal(ai.body.messages.at(-1).content, 'Vocês fazem chatbot para clínica?');
+    assert.equal(ff.calls.graph[gBefore].body.text.body, 'Temos chatbots com IA para clínicas.');
+  });
+
+  test('mensagem repetida pela Meta é processada uma única vez', async () => {
+    const raw = payload('Qual o prazo?', { from: '5547933330003', id: 'wamid.repetida' });
+    await post(s, raw); const after1 = ff.calls.ai.length;
+    await post(s, raw);
+    assert.equal(ff.calls.ai.length, after1);
+  });
+
+  test('quando a IA sinaliza [HUMANO], a conversa passa para você e a IA para de responder', async () => {
+    const from = '5547944440004';
+    ff.setReply('[HUMANO] Vou chamar o Maicon para negociar com você.');
+    await post(s, payload('Quero fechar contrato agora', { from }));
+    const [c] = await s.app.db.query('SELECT status, unread FROM wa_conversations WHERE wa_id = $1', [from]);
+    assert.equal(c.status, 'humano'); assert.equal(Number(c.unread), 1);
+    assert.doesNotMatch(ff.calls.graph.at(-1).body.text.body, /\[HUMANO\]/);
+    const aiBefore = ff.calls.ai.length; const gBefore = ff.calls.graph.length;
+    await post(s, payload('Alô?', { from }));
+    assert.equal(ff.calls.ai.length, aiBefore);
+    assert.equal(ff.calls.graph.length, gBefore);
+    ff.setReply('Resposta da IA.');
+  });
+
+  test('pedido de atendente e botão "Falar com..." passam direto para humano, sem gastar IA', async () => {
+    const aiBefore = ff.calls.ai.length;
+    await post(s, payload('quero falar com um atendente', { from: '5547955550005' }));
+    await post(s, payload('Falar com Maicon', { from: '5547955550006', button: 'humano' }));
+    assert.equal(ff.calls.ai.length, aiBefore);
+    const rows = await s.app.db.query("SELECT status FROM wa_conversations WHERE wa_id IN ('5547955550005', '5547955550006')");
+    assert.deepEqual(rows.map((r) => r.status), ['humano', 'humano']);
+  });
+
+  test('se a IA falhar, o cliente é avisado e a conversa vai para você', async () => {
+    ff.setFail(true);
+    const from = '5547966660006';
+    await post(s, payload('Vocês atendem fora do Brasil?', { from }));
+    ff.setFail(false);
+    const [c] = await s.app.db.query('SELECT status FROM wa_conversations WHERE wa_id = $1', [from]);
+    assert.equal(c.status, 'humano');
+    assert.equal(ff.calls.graph.at(-1).body.to, from);
+  });
+
+  test('com a IA desligada no painel, nada é enviado automaticamente', async () => {
+    await s.app.db.query("UPDATE settings SET value = '0' WHERE key = 'ia_ativa' RETURNING key");
+    const gBefore = ff.calls.graph.length; const aiBefore = ff.calls.ai.length;
+    await post(s, payload('Bom dia, tudo bem com vocês?', { from: '5547977770007' }));
+    assert.equal(ff.calls.graph.length, gBefore); assert.equal(ff.calls.ai.length, aiBefore);
+    const [c] = await s.app.db.query("SELECT unread FROM wa_conversations WHERE wa_id = '5547977770007'");
+    assert.equal(Number(c.unread), 1);
+    await s.app.db.query("UPDATE settings SET value = '1' WHERE key = 'ia_ativa' RETURNING key");
+  });
+
+  test('conversas no painel exigem login e CSRF; texto com HTML é guardado como texto', async () => {
+    await post(s, payload('<img src=x onerror=alert(1)>', { from: '5547988880008' }));
+    assert.equal((await req(s.base, 'GET', '/api/admin/whatsapp')).status, 401);
+    const l = await login(s.base);
+    const list = await req(s.base, 'GET', '/api/admin/whatsapp', { cookie: l.cookie });
+    assert.equal(list.status, 200);
+    const conv = list.data.find((c) => c.wa_id === '5547988880008');
+    assert.ok(conv);
+    const det = await req(s.base, 'GET', `/api/admin/whatsapp/${conv.id}`, { cookie: l.cookie });
+    assert.equal(det.data.messages[0].text, '<img src=x onerror=alert(1)>');
+    assert.equal((await req(s.base, 'PATCH', `/api/admin/whatsapp/${conv.id}`, { cookie: l.cookie, json: { status: 'humano' } })).status, 403);
+    assert.equal((await req(s.base, 'PATCH', `/api/admin/whatsapp/${conv.id}`, { cookie: l.cookie, json: { status: 'humano' }, headers: { 'X-CSRF-Token': l.csrf } })).status, 200);
+    const gBefore = ff.calls.graph.length;
+    const rep = await req(s.base, 'POST', `/api/admin/whatsapp/${conv.id}/reply`, { cookie: l.cookie, json: { text: 'Oi, aqui é o Maicon!' }, headers: { 'X-CSRF-Token': l.csrf } });
+    assert.equal(rep.status, 200);
+    assert.equal(ff.calls.graph[gBefore].body.text.body, 'Oi, aqui é o Maicon!');
+    assert.equal((await req(s.base, 'DELETE', `/api/admin/whatsapp/${conv.id}`, { cookie: l.cookie, headers: { 'X-CSRF-Token': l.csrf } })).status, 200);
+    const [{ c }] = await s.app.db.query('SELECT CAST(COUNT(*) AS INTEGER) AS c FROM wa_messages WHERE conversation_id = $1', [conv.id]);
+    assert.equal(Number(c), 0);
+  });
+
+  test('limite de respostas da IA por número evita gastos com abuso', async () => {
+    const from = '5547999990009';
+    for (let i = 0; i < 30; i++) await s.app.limits.whatsapp.hit(from);
+    const aiBefore = ff.calls.ai.length;
+    await post(s, payload('Mais uma pergunta?', { from }));
+    assert.equal(ff.calls.ai.length, aiBefore);
+  });
+});
