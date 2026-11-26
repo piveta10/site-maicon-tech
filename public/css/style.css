@@ -291,6 +291,26 @@ button { font: inherit; cursor: pointer; }
 .nf-logo { margin: 40px auto 24px; }
 .nf-actions { margin-top: 30px; }
 
+/* ---------- Política de privacidade ---------- */
+.legal { padding-top: 64px; }
+.legal__back { margin-left: auto; }
+.legal__wrap { max-width: 780px; }
+.legal__updated { color: var(--muted); font-size: .92rem; margin-top: 10px; }
+.legal__toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 8px; }
+.legal .legal__toc a { text-decoration: none; font-size: .85rem; color: var(--text-2); padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; transition: border-color .2s, color .2s; }
+.legal .legal__toc a:hover { color: #fff; border-color: var(--line-strong); }
+.legal section { padding-top: 36px; scroll-margin-top: 88px; }
+.legal h2 { font-size: 1.45rem; font-weight: 600; margin-bottom: 12px; }
+.legal h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 10px; }
+.legal p, .legal li { color: var(--text-2); }
+.legal p + p, .legal ul + p, .legal ol + p, .legal__box + p { margin-top: 14px; }
+.legal ul, .legal ol { padding-left: 22px; margin: 10px 0 0; display: grid; gap: 8px; }
+.legal b { color: var(--text); font-weight: 600; }
+.legal a:not(.btn) { color: var(--blue-2); text-decoration: underline; text-underline-offset: 3px; }
+.legal a:not(.btn):hover { color: var(--cyan); }
+.legal__box { margin: 20px 0; padding: 22px 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.footer__copy a { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
+
 /* ---------- Animação de entrada ---------- */
 .reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
 .reveal.is-visible { opacity: 1; transform: none; }

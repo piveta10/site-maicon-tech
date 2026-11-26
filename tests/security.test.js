@@ -287,7 +287,7 @@ describe('5. Validação de dados, XSS e links maliciosos', () => {
   });
 
   test('nenhum script/estilo inline no HTML (compatível com CSP rígida)', () => {
-    for (const f of ['public/index.html', 'public/admin/index.html', 'public/404.html']) {
+    for (const f of ['public/index.html', 'public/admin/index.html', 'public/404.html', 'public/privacidade.html']) {
       const html = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
       assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i, `script inline em ${f}`);
       assert.doesNotMatch(html, /\son[a-z]+\s*=/i, `evento inline (onclick...) em ${f}`);
